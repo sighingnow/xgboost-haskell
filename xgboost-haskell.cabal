@@ -1,7 +1,7 @@
 name:                xgboost-haskell
 version:             0.1.0.0
--- synopsis:
--- description:
+synopsis:            XGBoost library for Haskell.
+description:         XGBoost library for Haskell via FFI binding, on top of foundation.
 homepage:            https://github.com/sighingnow/xgboost-haskell#readme
 author:              Tao He
 maintainer:          sighingnow@gmail.com
@@ -11,11 +11,27 @@ build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
 
-executable xgboost-haskell
+
+Library
   hs-source-dirs:      src
+  exposed-modules:
+    ML.DMLC.XGBoost
+  other-modules:
+    ML.DMLC.XGBoost.FFI
+  default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+  build-depends:       base >= 4.7 && < 5
+                     , foundation
+
+executable xgboost-app
+  hs-source-dirs:      app
   main-is:             Main.hs
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                      , OverloadedStrings
   build-depends:       base >= 4.7 && < 5
                      , foundation
+                     , xgboost-haskell
+  extra-libraries:     xgboost
+  extra-lib-dirs:      ./
