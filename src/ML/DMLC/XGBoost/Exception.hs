@@ -9,7 +9,7 @@ import Foundation.Monad (throw)
 
 import qualified Prelude
 
-data XGBoostException = XGBError CInt String deriving Typeable
+data XGBoostException = XGBError Int32 String deriving Typeable
 
 instance Exception XGBoostException
 
