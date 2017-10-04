@@ -17,8 +17,10 @@ Library
   exposed-modules:
     ML.DMLC.XGBoost
     ML.DMLC.XGBoost.Exception
-  other-modules:
     ML.DMLC.XGBoost.FFI
+    ML.DMLC.XGBoost.Rabit.FFI
+  other-modules:
+    ML.DMLC.XGBoost.Foreign
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                      , OverloadedStrings

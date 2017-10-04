@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -12,56 +11,16 @@ module ML.DMLC.XGBoost.FFI where
 import Foundation
 import Foundation.Array.Internal
 import Foundation.Class.Storable
-import Foundation.Collection
 import Foundation.Foreign
 import Foundation.Primitive
-import Foundation.String
 
 import qualified Prelude
-import Foreign.Ptr (nullPtr)
 import qualified Foreign.Storable as Base
 import Foreign.Marshal.Alloc (alloca)
 import GHC.Exts
 
 import ML.DMLC.XGBoost.Exception
-
-{-- Types --------------------------------------------------------------------}
-
-type StringPtr = Ptr Word8
-type StringArray = Ptr StringPtr
-type FloatArray = Ptr Float
-type UIntArray = Ptr Word32
-type DMatrixArray = Ptr DMatrix
-type ByteArray = Ptr Word8
-
-{-- Orphan instance to make `Ptr a` as foundation's PrimType --}
-
-instance PrimType (Ptr a) where
-    primSizeInBytes _ = size (Proxy :: Proxy (Ptr a))
-    {-# INLINE primSizeInBytes #-}
-
-    primShiftToBytes _ = let (CountOf k) = size (Proxy :: Proxy (Ptr a)) in if k == 4 then 3 else 5 -- TODO may be wrong
-    {-# INLINE primShiftToBytes #-}
-
-    primBaUIndex ba (Offset (I# n)) = Ptr (indexAddrArray# ba n)
-    {-# INLINE primBaUIndex #-}
-
-    primMbaURead mba (Offset (I# n)) = primitive $ \s1 -> let !(# s2, r1 #) = readAddrArray# mba n s1
-                                                           in (# s2, Ptr r1 #)
-    {-# INLINE primMbaURead #-}
-
-    primMbaUWrite mba (Offset (I# n)) (Ptr w) = primitive $ \s1 -> (# writeAddrArray# mba n w s1, () #)
-    {-# INLINE primMbaUWrite #-}
-
-    primAddrIndex addr (Offset (I# n)) = Ptr (indexAddrOffAddr# addr n)
-    {-# INLINE primAddrIndex #-}
-
-    primAddrRead addr (Offset (I# n)) = primitive $ \s1 -> let !(# s2, r1 #) = readAddrOffAddr# addr n s1
-                                                            in (# s2, Ptr r1 #)
-    {-# INLINE primAddrRead #-}
-
-    primAddrWrite addr (Offset (I# n)) (Ptr w) = primitive $ \s1 -> (# writeAddrOffAddr# addr n w s1, () #)
-    {-# INLINE primAddrWrite #-}
+import ML.DMLC.XGBoost.Foreign
 
 newtype DMatrix = DMatrix (Ptr ())
     deriving (Eq, Storable, Base.Storable)
@@ -95,6 +54,8 @@ instance PrimType DMatrix where
     primAddrWrite addr (Offset (I# n)) (DMatrix (Ptr w)) = primitive $ \s1 -> (# writeAddrOffAddr# addr n w s1, () #)
     {-# INLINE primAddrWrite #-}
 
+type DMatrixArray = Ptr DMatrix
+
 newtype Booster = Booster (Ptr ())
     deriving (Storable, Base.Storable)
 
@@ -121,40 +82,6 @@ type XGBCallbackDataIterNext = Ptr ()
 --             -> XGBCallbackSetData
 --             -> DataHolderHandle
 --             -> IO Int)
-
-{-- Utilities ----------------------------------------------------------------}
-
-boolToInt32 :: Bool -> Int32
-boolToInt32 b = if b then 1 else 0
-
-int32ToBool :: Int32 -> Bool
-int32ToBool i = if i == 0 then False else True
-
-getString :: StringPtr -> IO String
-getString ptr
-    | ptr == nullPtr = return ""
-    | otherwise = fromBytesUnsafe <$> peekArrayEndedBy 0 ptr
-
-withString :: String -> (StringPtr -> IO a) -> IO a
-withString s = withPtr (toBytes UTF8 s)
-
-getStringArray :: CountOf StringPtr -> StringArray -> IO [String]
-getStringArray nlen ptr
-    | ptr == nullPtr = return []
-    | otherwise = do ptrs <- peekArray nlen ptr :: IO (Array StringPtr)
-                     mapM getString . toList $ ptrs
-
-getStringArray' :: StringArray -> IO [String]
-getStringArray' ptr
-    | ptr == nullPtr = return []
-    | otherwise = do ptrs <- peekArrayEndedBy nullPtr ptr :: IO (Array StringPtr)
-                     mapM getString . toList $ ptrs
-
-withStringArray :: [String] -> (StringArray -> IO a) -> IO a
-withStringArray [] f = f nullPtr
-withStringArray ss f = do
-    ptrs <- mapM (\s -> withString s return) ss
-    withPtr (fromList ptrs) f
 
 {-- Foreign Imports ----------------------------------------------------------}
 
@@ -243,7 +170,7 @@ foreign import ccall unsafe "XGBoosterFree" c_xgBoosterFree
 foreign import ccall unsafe "XGBoosterSetParam" c_xgBoosterSetParam
     :: Booster
     -> StringPtr
-    -> FloatArray
+    -> StringPtr
     -> IO Int32
 
 foreign import ccall unsafe "XGBoosterUpdateOneIter" c_xgBoosterUpdateOneIter
@@ -332,11 +259,12 @@ foreign import ccall unsafe "XGBoosterGetAttrNames" c_xgBoosterGetAttrNames
 -- | In XGBoost, the float info is correctly restricted to DMatrix's meta information, namely label and weight.
 --
 -- Ref: /https://github.com/dmlc/xgboost/issues/1026#issuecomment-199873890/.
-data InfoField = LabelInfo | WeightInfo deriving Eq
+data InfoField = LabelInfo | WeightInfo | BaseMargin deriving Eq
 
 instance Prelude.Show InfoField where
     show LabelInfo = "label"
     show WeightInfo = "weight"
+    show BaseMargin = "base_margin"
 
 -- | In XGBoost, the only uint field valid is "root_index".
 --
@@ -345,6 +273,20 @@ data UIntInfoField = RootIndex deriving Eq
 
 instance Prelude.Show UIntInfoField where
     show RootIndex = "root_index"
+
+-- | See https://github.com/dmlc/xgboost/blob/master/include/xgboost/c_api.h#L399
+data PredictMask = Normal | Margin | LeafIndex | FeatureContrib
+
+instance Enum PredictMask where
+    toEnum 0 = Normal
+    toEnum 1 = Margin
+    toEnum 2 = LeafIndex
+    toEnum 4 = FeatureContrib
+    toEnum _ = error "No such PredictMask"
+    fromEnum Normal = 0
+    fromEnum Margin = 1
+    fromEnum LeafIndex = 2
+    fromEnum FeatureContrib = 4
 
 {-- Error Handling -----------------------------------------------------------}
 
@@ -392,22 +334,22 @@ xgbFromMat arr r c missing = alloca $ \pm ->
 dmatrixFree :: DMatrix -> IO ()
 dmatrixFree = guard_ffi . c_xgDMatrixFree
 
-xgbSetInfo
+xgbSetFloatInfo
     :: DMatrix
     -> InfoField    -- ^ label field
     -> UArray Float -- ^ info vector
     -> IO ()
-xgbSetInfo dm field value = do
+xgbSetFloatInfo dm field value = do
     let (CountOf len) = length value
     withString (show field) $ \ps ->
         withPtr value $ \pv ->
             guard_ffi $ c_xgDMatrixSetFloatInfo dm ps pv (fromIntegral len)
 
-xgbGetInfo
+xgbGetFloatInfo
     :: DMatrix
     -> InfoField            -- ^ label field
     -> IO (UArray Float)    -- ^ info vector
-xgbGetInfo dm field =
+xgbGetFloatInfo dm field =
     alloca $ \plen ->
         alloca $ \parr ->
             withString (show field) $ \ps -> do
@@ -416,22 +358,22 @@ xgbGetInfo dm field =
                 arr <- peek parr
                 peekArray (CountOf (fromIntegral len)) arr
 
-xgbSetInfoUInt
+xgbSetUIntInfo
     :: DMatrix
     -> UIntInfoField    -- ^ label field
     -> UArray Word32    -- ^ info vector
     -> IO ()
-xgbSetInfoUInt dm field value = do
+xgbSetUIntInfo dm field value = do
     let (CountOf len) = length value
     withString (show field) $ \ps ->
         withPtr value $ \pv ->
             guard_ffi $ c_xgDMatrixSetUIntInfo dm ps pv (fromIntegral len)
 
-xgbGetInfoUInt
+xgbGetUIntInfo
     :: DMatrix
     -> UIntInfoField        -- ^ label field
     -> IO (UArray Word32)   -- ^ info vector
-xgbGetInfoUInt dm field =
+xgbGetUIntInfo dm field =
     alloca $ \plen ->
         alloca $ \parr ->
             withString (show field) $ \ps -> do
@@ -468,11 +410,11 @@ boosterFree = guard_ffi . c_xgBoosterFree
 setParam
     :: Booster
     -> String       -- ^ Name of parameter.
-    -> UArray Float -- ^ Value of parameter.
+    -> String       -- ^ Value of parameter.
     -> IO ()
 setParam booster name value =
     withString name $ \pname ->
-        withPtr value $ \pvalue ->
+        withString value $ \pvalue ->
             guard_ffi $ c_xgBoosterSetParam booster pname pvalue
 
 updateOneIter
@@ -509,24 +451,16 @@ evalOneIter booster iter dms names = do
                 guard_ffi $ c_xgBoosterEvalOneIter booster iter pdms pnames (fromIntegral nlen) pstat
                 peek pstat >>= getString
 
--- | See https://github.com/dmlc/xgboost/blob/master/include/xgboost/c_api.h#L399
-data PredictMask = Normal | Margin | LeafIndex | FeatureContrib
-
 predict
     :: Booster
     -> DMatrix
     -> PredictMask
     -> Int32
     -> IO (UArray Float)
-predict booster dmat mask ntree = do
-    let mask' = case mask of
-                    Normal -> 0
-                    Margin -> 1
-                    LeafIndex -> 2
-                    FeatureContrib -> 4
+predict booster dmat mask ntree =
     alloca $ \plen ->
         alloca $ \parr -> do
-            guard_ffi $ c_xgBoosterPredict booster dmat mask' ntree plen parr
+            guard_ffi $ c_xgBoosterPredict booster dmat (fromIntegral . fromEnum $ mask) ntree plen parr
             len <- peek plen
             arr <- peek parr
             peekArray (CountOf (fromIntegral len)) arr
@@ -577,4 +511,4 @@ getAttrNames booster =
         alloca $ \pout -> do
             guard_ffi $ c_xgBoosterGetAttrNames booster plen pout
             nlen <- peek plen
-            peek pout >>= getStringArray (CountOf (fromIntegral nlen))
+            peek pout >>= getStringArray' (CountOf (fromIntegral nlen))

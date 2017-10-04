@@ -16,11 +16,11 @@ main = do
 
     dm <- xgbFromMat ([1.0, 2.0, 3.0, 4.0] :: UArray Float) 2 2 2.0
 
-    xgbSetInfo dm LabelInfo ([5.0, 6.0] :: UArray Float)
-    info <- xgbGetInfo dm LabelInfo
+    xgbSetFloatInfo dm LabelInfo ([5.0, 6.0] :: UArray Float)
+    info <- xgbGetFloatInfo dm LabelInfo
     print info
 
-    xgbGetInfo dm LabelInfo >>= print
+    xgbGetFloatInfo dm LabelInfo >>= print
 
     dmatrixFree dm
 
