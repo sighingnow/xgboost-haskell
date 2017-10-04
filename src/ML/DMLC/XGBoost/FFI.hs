@@ -14,8 +14,9 @@ import Foundation.Class.Storable
 import Foundation.Foreign
 import Foundation.Primitive
 
-import qualified Prelude
-import qualified Foreign.Storable as Base
+import qualified Prelude (Show(..))
+import Data.Bits ((.|.))
+import qualified Foreign.Storable
 import Foreign.Marshal.Alloc (alloca)
 import GHC.Exts
 
@@ -23,7 +24,7 @@ import ML.DMLC.XGBoost.Exception
 import ML.DMLC.XGBoost.Foreign
 
 newtype DMatrix = DMatrix (Ptr ())
-    deriving (Eq, Storable, Base.Storable)
+    deriving (Eq, Storable, Foreign.Storable.Storable)
 
 {-- Instances to make `DMatirx` (`Ptr ()`) as foundation's PrimType, GeneralizedNewtypeDeriving doesn't work here. --}
 
@@ -57,16 +58,16 @@ instance PrimType DMatrix where
 type DMatrixArray = Ptr DMatrix
 
 newtype Booster = Booster (Ptr ())
-    deriving (Storable, Base.Storable)
+    deriving (Storable, Foreign.Storable.Storable)
 
 newtype DataIter = DataIter (Ptr ())
-    deriving (Storable, Base.Storable)
+    deriving (Storable, Foreign.Storable.Storable)
 
 newtype DataHolder = DataHolder (Ptr ())
-    deriving (Storable, Base.Storable)
+    deriving (Storable, Foreign.Storable.Storable)
 
 newtype XGBoostBatchCSR = XGBoostBatchCSR (Ptr ())
-    deriving (Storable, Base.Storable)
+    deriving (Storable, Foreign.Storable.Storable)
 
 type XGBCallbackSetData = Ptr ()
 -- TODO
@@ -252,6 +253,15 @@ foreign import ccall unsafe "XGBoosterGetAttrNames" c_xgBoosterGetAttrNames
     :: Booster
     -> Ptr Word64
     -> Ptr StringArray
+    -> IO Int32
+
+foreign import ccall unsafe "XGBoosterLoadRabitCheckpoint" c_xgBoosterLoadRabitCheckpoint
+    :: Booster
+    -> Ptr Int32
+    -> IO Int32
+
+foreign import ccall unsafe "XGBoosterSaveRabitCheckpoint" c_xgBoosterSaveRabitCheckpoint
+    :: Booster
     -> IO Int32
 
 {-- Tag Types ----------------------------------------------------------------}
@@ -451,16 +461,17 @@ evalOneIter booster iter dms names = do
                 guard_ffi $ c_xgBoosterEvalOneIter booster iter pdms pnames (fromIntegral nlen) pstat
                 peek pstat >>= getString
 
-predict
+boosterPredict
     :: Booster
     -> DMatrix
-    -> PredictMask
+    -> [PredictMask]
     -> Int32
     -> IO (UArray Float)
-predict booster dmat mask ntree =
+boosterPredict booster dmat masks ntree = do
+    let mask = fromIntegral $ foldl' (.|.) (fromEnum Normal) (fromEnum <$> masks)
     alloca $ \plen ->
         alloca $ \parr -> do
-            guard_ffi $ c_xgBoosterPredict booster dmat (fromIntegral . fromEnum $ mask) ntree plen parr
+            guard_ffi $ c_xgBoosterPredict booster dmat mask ntree plen parr
             len <- peek plen
             arr <- peek parr
             peekArray (CountOf (fromIntegral len)) arr
@@ -488,8 +499,8 @@ loadModelFromBuffer
     -> IO ()
 loadModelFromBuffer booster buffer nlen = guard_ffi $ c_xgBoosterLoadModelFromBuffer booster buffer (fromIntegral nlen)
 
-getAttr :: Booster -> String -> IO String
-getAttr booster name =
+getBoosterAttr :: Booster -> String -> IO String
+getBoosterAttr booster name =
     alloca $ \pout ->
         alloca $ \psucc ->
             withString name $ \pname -> do
@@ -499,8 +510,8 @@ getAttr booster name =
                     then peek pout >>= getString
                     else return ""
 
-setAttr :: Booster -> String -> String -> IO ()
-setAttr booster name value =
+setBoosterAttr :: Booster -> String -> String -> IO ()
+setBoosterAttr booster name value =
     withString name $ \pname ->
         withString value $ \pvalue ->
             guard_ffi $ c_xgBoosterSetAttr booster pname pvalue
@@ -512,3 +523,12 @@ getAttrNames booster =
             guard_ffi $ c_xgBoosterGetAttrNames booster plen pout
             nlen <- peek plen
             peek pout >>= getStringArray' (CountOf (fromIntegral nlen))
+
+loadRabitCheckpoint :: Booster -> IO Int32 -- ^ Return output version of the model
+loadRabitCheckpoint booster =
+    alloca $ \pversion -> do
+        guard_ffi $ c_xgBoosterLoadRabitCheckpoint booster pversion
+        peek pversion
+
+saveRabitCheckpoint :: Booster -> IO ()
+saveRabitCheckpoint booster = guard_ffi $ c_xgBoosterSaveRabitCheckpoint booster

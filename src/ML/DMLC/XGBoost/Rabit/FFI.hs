@@ -84,8 +84,8 @@ rabitInit args = do
 rabitFinalize :: IO ()
 rabitFinalize = c_rabitFinalize
 
-rabitGetrank :: IO Int32
-rabitGetrank = c_rabitGetRank
+rabitGetRank :: IO Int32
+rabitGetRank = c_rabitGetRank
 
 rabitGetWordSize :: IO Int32
 rabitGetWordSize = c_rabitGetWorldSize
