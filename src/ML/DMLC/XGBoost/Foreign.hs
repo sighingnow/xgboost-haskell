@@ -13,7 +13,7 @@ import Foundation
 import Foundation.Array.Internal
 import Foundation.Class.Storable
 import Foundation.Collection
-import Foundation.Primitive
+import Foundation.Primitive hiding (toBytes)
 import Foundation.String
 
 import Foreign.Ptr (nullPtr)

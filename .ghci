@@ -1,1 +1,6 @@
+:set -fobject-code
+
+:set -XNoImplicitPrelude
 :set -XOverloadedStrings
+
+:m +Foundation

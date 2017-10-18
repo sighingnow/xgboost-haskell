@@ -20,10 +20,14 @@ main = do
     dtrain <- xgbFromFile "examples/data/agaricus.txt.train" ?debug
     dtest <- xgbFromFile "examples/data/agaricus.txt.test" ?debug
 
-    booster <- xgbTrain dtrain 100
+    booster <- xgbTrain dtrain 10
     result <- xgbPredict booster dtest [] 0
 
-    putStrLn . show $ result
+    labels <- xgbGetLabel dtest
+
+    putStrLn . show $ compareLabels labels result
+
+    -- putStrLn . show $ valueToLabel' result
 
     dmatrixFree dtrain
     dmatrixFree dtest

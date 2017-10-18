@@ -4,7 +4,6 @@ module ML.DMLC.XGBoost.Exception
     ) where
 
 import Foundation
-import Foundation.Foreign
 import Foundation.Monad (throw)
 
 import qualified Prelude

@@ -269,20 +269,20 @@ foreign import ccall unsafe "XGBoosterSaveRabitCheckpoint" c_xgBoosterSaveRabitC
 -- | In XGBoost, the float info is correctly restricted to DMatrix's meta information, namely label and weight.
 --
 -- Ref: /https://github.com/dmlc/xgboost/issues/1026#issuecomment-199873890/.
-data InfoField = LabelInfo | WeightInfo | BaseMargin deriving Eq
+data FloatInfoField = LabelInfo | WeightInfo | BaseMarginInfo deriving Eq
 
-instance Prelude.Show InfoField where
+instance Prelude.Show FloatInfoField where
     show LabelInfo = "label"
     show WeightInfo = "weight"
-    show BaseMargin = "base_margin"
+    show BaseMarginInfo = "base_margin"
 
 -- | In XGBoost, the only uint field valid is "root_index".
 --
 -- Ref: /https://github.com/dmlc/xgboost/issues/1787#issuecomment-261653748/.
-data UIntInfoField = RootIndex deriving Eq
+data UIntInfoField = RootIndexInfo deriving Eq
 
 instance Prelude.Show UIntInfoField where
-    show RootIndex = "root_index"
+    show RootIndexInfo = "root_index"
 
 -- | See https://github.com/dmlc/xgboost/blob/master/include/xgboost/c_api.h#L399
 data PredictMask = Normal | Margin | LeafIndex | FeatureContrib
@@ -346,7 +346,7 @@ dmatrixFree = guard_ffi . c_xgDMatrixFree
 
 xgbSetFloatInfo
     :: DMatrix
-    -> InfoField    -- ^ label field
+    -> FloatInfoField    -- ^ label field
     -> UArray Float -- ^ info vector
     -> IO ()
 xgbSetFloatInfo dm field value = do
@@ -357,7 +357,7 @@ xgbSetFloatInfo dm field value = do
 
 xgbGetFloatInfo
     :: DMatrix
-    -> InfoField            -- ^ label field
+    -> FloatInfoField            -- ^ label field
     -> IO (UArray Float)    -- ^ info vector
 xgbGetFloatInfo dm field =
     alloca $ \plen ->
@@ -367,6 +367,24 @@ xgbGetFloatInfo dm field =
                 len <- peek plen
                 arr <- peek parr
                 peekArray (CountOf (fromIntegral len)) arr
+
+xgbGetLabel :: DMatrix -> IO (UArray Float)
+xgbGetLabel mat = xgbGetFloatInfo mat LabelInfo
+
+xgbGetWeight :: DMatrix -> IO (UArray Float)
+xgbGetWeight mat = xgbGetFloatInfo mat WeightInfo
+
+xgbGetBaseMargin :: DMatrix -> IO (UArray Float)
+xgbGetBaseMargin mat = xgbGetFloatInfo mat BaseMarginInfo
+
+xgbSetLabel :: DMatrix -> UArray Float -> IO ()
+xgbSetLabel mat = xgbSetFloatInfo mat LabelInfo
+
+xgbSetWeight :: DMatrix -> UArray Float -> IO ()
+xgbSetWeight mat = xgbSetFloatInfo mat WeightInfo
+
+xgbSetBaseMargin :: DMatrix -> UArray Float -> IO ()
+xgbSetBaseMargin mat = xgbSetFloatInfo mat BaseMarginInfo
 
 xgbSetUIntInfo
     :: DMatrix

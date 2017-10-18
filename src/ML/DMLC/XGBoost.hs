@@ -9,13 +9,66 @@ module ML.DMLC.XGBoost
 
 import Foundation
 import Foundation.Collection
+import Foundation.Numerical
 
-import qualified Prelude
+import qualified Prelude (fromIntegral, Show(..))
 import Control.Exception (assert)
 import Control.Monad (when, foldM_)
 
 import ML.DMLC.XGBoost.FFI
 import ML.DMLC.XGBoost.Rabit.FFI
+
+{------------------------------------------------------------------------------
+-- Utility functions.
+------------------------------------------------------------------------------}
+
+integerToFloat :: Int -> Float
+integerToFloat = Prelude.fromIntegral
+
+-- | Cast floating point output to integer label.
+valueToLabel :: (IntegralRounding a) => a -> Int32
+valueToLabel = roundNearest
+
+{-# SPECIALIZE valueToLabel :: Float -> Int32 #-}
+
+{-# INLINE valueToLabel #-}
+
+compareLabels
+    :: UArray Float -- ^ Wanted
+    -> UArray Float -- ^ Actual output
+    -> Float        -- ^ Successfully rate
+compareLabels wanted actual = integerToFloat sameLength / integerToFloat nLength
+    where
+        sameLabel a b = valueToLabel a == valueToLabel b
+        accLabels (a, b) n = if sameLabel a b
+                                then n + 1
+                                else n
+        nLength = let (CountOf k) = min (length wanted) (length actual) in k
+        sameLength = foldr' accLabels 0 $ (zipWith (,) wanted actual :: [(Float, Float)])
+
+compareLabels'
+    :: UArray Float             -- ^ Wanted
+    -> UArray Float             -- ^ Actual output
+    -> (Float -> Float -> Bool) -- ^ decide whether two given labels are equal
+    -> Float                    -- ^ Successfully rate
+compareLabels' wanted actual sameLabel = integerToFloat sameLength / integerToFloat nLength
+    where
+        accLabels (a, b) n = if sameLabel a b
+                                then n + 1
+                                else n
+        nLength = let (CountOf k) = min (length wanted) (length actual) in k
+        sameLength = foldr' accLabels 0 $ (zipWith (,) wanted actual :: [(Float, Float)])
+
+
+{------------------------------------------------------------------------------
+-- DMatrix related APIs.
+------------------------------------------------------------------------------}
+
+
+
+{------------------------------------------------------------------------------
+-- Booster related APIs.
+------------------------------------------------------------------------------}
 
 -- | Parameter passed to booster.
 data BoosterParam = forall a. Show a => Param { paramName :: String
@@ -49,6 +102,10 @@ newBooster dmats = do
     forM_ ?params $ \param ->
         setBoosterParam booster param
     return booster
+
+{------------------------------------------------------------------------------
+-- Model train and predict APIs.
+------------------------------------------------------------------------------}
 
 xgbTrain
     :: (?params :: [BoosterParam], ?debug :: Bool)
