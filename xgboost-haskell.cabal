@@ -5,6 +5,8 @@ description:         XGBoost library for Haskell via FFI binding, on top of foun
 homepage:            https://github.com/sighingnow/xgboost-haskell#readme
 author:              Tao He
 maintainer:          sighingnow@gmail.com
+license:             MIT
+license-file:        LICENSE
 copyright:           Copyright: (c) 2017 Tao He
 category:            Development
 build-type:          Simple
