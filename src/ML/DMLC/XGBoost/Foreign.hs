@@ -75,7 +75,7 @@ getString' nlen ptr
     | otherwise = fromBytesUnsafe <$> peekArray nlen ptr
 
 withString :: String -> (StringPtr -> IO a) -> IO a
-withString s = withPtr (toBytes UTF8 s)
+withString s = withPtr (toBytes UTF8 (s <> "\0"))
 
 getStringArray :: StringArray -> IO [String]
 getStringArray ptr
