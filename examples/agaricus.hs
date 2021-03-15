@@ -21,7 +21,7 @@ main = do
     dtest <- xgbFromFile "examples/data/agaricus.txt.test" ?debug
 
     booster <- xgbTrain dtrain 10
-    result <- xgbPredict booster dtest [] 0
+    result <- xgbPredict booster dtest [] 0 False
 
     labels <- xgbGetLabel dtest
 

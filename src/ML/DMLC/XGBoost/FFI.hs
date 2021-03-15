@@ -197,13 +197,15 @@ foreign import ccall unsafe "XGBoosterEvalOneIter" c_xgBoosterEvalOneIter
     -> Ptr StringPtr
     -> IO Int32
 
+-- https://github.com/dmlc/xgboost/blob/v1.2.1/include/xgboost/c_api.h#L615-L644
 foreign import ccall unsafe "XGBoosterPredict" c_xgBoosterPredict
     :: Booster
     -> DMatrix
-    -> Int32
-    -> Int32
-    -> Ptr Word64
-    -> Ptr FloatArray
+    -> Int32 -- ^ option_mask
+    -> Int32 -- ^ ntree_limit
+    -> Int32 -- ^ training
+    -> Ptr Word64 -- ^ out_len
+    -> Ptr FloatArray -- ^ out_result
     -> IO Int32
 
 foreign import ccall unsafe "XGBoosterLoadModel" c_xgBoosterLoadModel
@@ -484,12 +486,15 @@ boosterPredict
     -> DMatrix
     -> [PredictMask]
     -> Int32
+    -> Bool -- ^ training
     -> IO (UArray Float)
-boosterPredict booster dmat masks ntree = do
-    let mask = fromIntegral $ foldl' (.|.) (fromEnum Normal) (fromEnum <$> masks)
+boosterPredict booster dmat masks ntree training = do
+    let
+      mask = fromIntegral $ foldl' (.|.) (fromEnum Normal) (fromEnum <$> masks)
+      trainingFFI = if training then 1 else 0
     alloca $ \plen ->
         alloca $ \parr -> do
-            guard_ffi $ c_xgBoosterPredict booster dmat mask ntree plen parr
+            guard_ffi $ c_xgBoosterPredict booster dmat mask ntree trainingFFI plen parr
             len <- peek plen
             arr <- peek parr
             peekArray (CountOf (fromIntegral len)) arr
