@@ -153,4 +153,4 @@ xgbPredict
     -> Int32            -- ^ Limit number of trees in the prediction; defaults to 0 (use all trees).
     -> Bool             -- ^ `training` parameter
     -> IO (UArray Float)
-xgbPredict booster dtest masks nlimit training = boosterPredict booster dtest masks nlimit training
+xgbPredict = boosterPredict
